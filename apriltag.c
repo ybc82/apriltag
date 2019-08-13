@@ -994,8 +994,8 @@ zarray_t *apriltag_detector_detect(apriltag_detector_t *td, image_u8_t *im_orig)
         td->wp = workerpool_create(td->nthreads);
     }
 
-    timeprofile_clear(td->tp);
-    timeprofile_stamp(td->tp, "init");
+    // timeprofile_clear(td->tp);
+    // timeprofile_stamp(td->tp, "init");
 
     ///////////////////////////////////////////////////////////
     // Step 1. Detect quads according to requested image decimation

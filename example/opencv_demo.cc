@@ -45,13 +45,14 @@ extern "C" {
 using namespace std;
 using namespace cv;
 
+static string CALIB_DATA_PATH = "/home/bocheng/code/parking_robot/code_ws/src/mecanum_robot/conf/camera_calib";
 
 int main(int argc, char *argv[])
 {
     getopt_t *getopt = getopt_create();
 
     getopt_add_bool(getopt, 'h', "help", 0, "Show this help");
-    getopt_add_bool(getopt, 'd', "debug", 1, "Enable debugging output (slow)");
+    getopt_add_bool(getopt, 'd', "debug", 0, "Enable debugging output (slow)");
     getopt_add_bool(getopt, 'q', "quiet", 0, "Reduce output");
     getopt_add_string(getopt, 'f', "family", "tag36h11", "Tag family to use");
     getopt_add_int(getopt, 't', "threads", "1", "Use this many CPU threads");
@@ -67,11 +68,30 @@ int main(int argc, char *argv[])
     }
 
     // Initialize camera
-    VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        cerr << "Couldn't open video capture device" << endl;
-        return -1;
-    }
+    // VideoCapture cap(0);
+    // if (!cap.isOpened()) {
+    //     cerr << "Couldn't open video capture device" << endl;
+    //     return -1;
+    // }
+    const zarray_t *inputs = getopt_get_extra_args(getopt);
+    char *path;
+    zarray_get(inputs, 0, &path);
+    printf("loading %s\n", path);
+
+    Mat map1;
+    Mat map2;
+    string map1_path = CALIB_DATA_PATH + "/" + "camera_map1_33.xml";
+    string map2_path = CALIB_DATA_PATH + "/" + "camera_map2_33.xml";
+    cout << "Loading " << map1_path << endl;
+    FileStorage fs1(map1_path, FileStorage::READ);
+    fs1["map1"] >> map1;
+    fs1.release();
+    cout << "Loading " << map2_path << endl;
+    FileStorage fs2(map2_path, FileStorage::READ);
+    fs2["map2"] >> map2;
+    fs2.release();
+
+    int quiet = getopt_get_bool(getopt, "quiet");
 
     // Initialize tag detector with options
     apriltag_family_t *tf = NULL;
@@ -106,10 +126,26 @@ int main(int argc, char *argv[])
     td->debug = getopt_get_bool(getopt, "debug");
     td->refine_edges = getopt_get_bool(getopt, "refine-edges");
 
-    Mat frame, gray;
-    while (true) {
-        cap >> frame;
-        cvtColor(frame, gray, COLOR_BGR2GRAY);
+    Mat frame_orig, gray_orig;
+    Mat frame, gray;    // calibrated images
+    // while (true) {
+    {
+
+        frame_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+        // cvtColor(frame, gray, COLOR_BGR2GRAY);
+        gray_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+
+        timeprofile_clear(td->tp);
+        timeprofile_stamp(td->tp, "init");
+
+        remap(frame_orig, frame, map1, map2, INTER_LINEAR);
+        remap(gray_orig, gray, map1, map2, INTER_LINEAR);
+        timeprofile_stamp(td->tp, "remap");
+        /*
+        frame = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+        // cvtColor(frame, gray, COLOR_BGR2GRAY);
+        gray = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+        */
 
         // Make an image_u8_t header for the Mat data
         image_u8_t im = { .width = gray.cols,
@@ -152,9 +188,13 @@ int main(int argc, char *argv[])
         }
         apriltag_detections_destroy(detections);
 
+        if (!quiet) {
+            timeprofile_display(td->tp);
+        }
+
         imshow("Tag Detections", frame);
-        if (waitKey(30) >= 0)
-            break;
+        // if (waitKey(30) >= 0)
+        //     break;
     }
 
     apriltag_detector_destroy(td);
