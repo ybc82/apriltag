@@ -78,19 +78,24 @@ int main(int argc, char *argv[])
     zarray_get(inputs, 0, &path);
     printf("loading %s\n", path);
 
-    Mat map1;
-    Mat map2;
+    Mat map1_f;
+    Mat map2_f;
     string map1_path = CALIB_DATA_PATH + "/" + "camera_map1_33.xml";
     string map2_path = CALIB_DATA_PATH + "/" + "camera_map2_33.xml";
     cout << "Loading " << map1_path << endl;
     FileStorage fs1(map1_path, FileStorage::READ);
-    fs1["map1"] >> map1;
+    fs1["map1"] >> map1_f;
     fs1.release();
     cout << "Loading " << map2_path << endl;
     FileStorage fs2(map2_path, FileStorage::READ);
-    fs2["map2"] >> map2;
+    fs2["map2"] >> map2_f;
     fs2.release();
 
+    Mat map1;
+    Mat map2;
+    cout << map1.type() << ", " << map2.type() << "; " << map1_f.type() << ", " << map2_f.type() << endl;
+    cout << CV_16SC2 << ", " << CV_16UC1 << ", " << CV_32FC1 << ", " << CV_32FC2 << endl;
+    convertMaps(map1_f, map2_f, map1, map2, CV_16SC2, false);
     int quiet = getopt_get_bool(getopt, "quiet");
 
     // Initialize tag detector with options
@@ -128,18 +133,19 @@ int main(int argc, char *argv[])
 
     Mat frame_orig, gray_orig;
     Mat frame, gray;    // calibrated images
-    // while (true) {
+
+    frame_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+    // cvtColor(frame, gray, COLOR_BGR2GRAY);
+    gray_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
+
+    timeprofile_clear(td->tp);
+    timeprofile_stamp(td->tp, "init");
+
+    // USER: for-loop for N times to get more data on processing time
+    for (int i = 0; i < 1; i++) 
     {
-
-        frame_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
-        // cvtColor(frame, gray, COLOR_BGR2GRAY);
-        gray_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
-
-        timeprofile_clear(td->tp);
-        timeprofile_stamp(td->tp, "init");
-
-        remap(frame_orig, frame, map1, map2, INTER_LINEAR);
-        remap(gray_orig, gray, map1, map2, INTER_LINEAR);
+        remap(frame_orig, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+        remap(gray_orig, gray, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
         timeprofile_stamp(td->tp, "remap");
         /*
         frame = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
@@ -187,15 +193,16 @@ int main(int argc, char *argv[])
                     fontface, fontscale, Scalar(0xff, 0x99, 0), 2);
         }
         apriltag_detections_destroy(detections);
-
-        if (!quiet) {
-            timeprofile_display(td->tp);
-        }
-
-        imshow("Tag Detections", frame);
-        // if (waitKey(30) >= 0)
-        //     break;
     }
+
+
+    if (!quiet) {
+        timeprofile_display(td->tp);
+    }
+
+    imshow("Tag Detections", frame);
+    // if (waitKey(30) >= 0)
+    //     break;
 
     apriltag_detector_destroy(td);
 
