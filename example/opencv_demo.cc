@@ -67,6 +67,8 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
+    int quiet = getopt_get_bool(getopt, "quiet");
+
     // Initialize camera
     // VideoCapture cap(0);
     // if (!cap.isOpened()) {
@@ -82,21 +84,23 @@ int main(int argc, char *argv[])
     Mat map2_f;
     string map1_path = CALIB_DATA_PATH + "/" + "camera_map1_33.xml";
     string map2_path = CALIB_DATA_PATH + "/" + "camera_map2_33.xml";
-    cout << "Loading " << map1_path << endl;
+    if (!quiet)
+        cout << "Loading " << map1_path << endl;
     FileStorage fs1(map1_path, FileStorage::READ);
     fs1["map1"] >> map1_f;
     fs1.release();
-    cout << "Loading " << map2_path << endl;
+    if (!quiet)
+        cout << "Loading " << map2_path << endl;
     FileStorage fs2(map2_path, FileStorage::READ);
     fs2["map2"] >> map2_f;
     fs2.release();
 
     Mat map1;
     Mat map2;
-    cout << map1.type() << ", " << map2.type() << "; " << map1_f.type() << ", " << map2_f.type() << endl;
-    cout << CV_16SC2 << ", " << CV_16UC1 << ", " << CV_32FC1 << ", " << CV_32FC2 << endl;
+    // cout << map1.type() << ", " << map2.type() << "; " << map1_f.type() << ", " << map2_f.type() << endl;
+    // cout << CV_16SC2 << ", " << CV_16UC1 << ", " << CV_32FC1 << ", " << CV_32FC2 << endl;
     convertMaps(map1_f, map2_f, map1, map2, CV_16SC2, false);
-    int quiet = getopt_get_bool(getopt, "quiet");
+
 
     // Initialize tag detector with options
     apriltag_family_t *tf = NULL;
@@ -133,6 +137,10 @@ int main(int argc, char *argv[])
 
     Mat frame_orig, gray_orig;
     Mat frame, gray;    // calibrated images
+    Mat cropped, img;
+
+    Rect crop_rect(228, 94, 357, 275);
+    // Rect crop_rect(1, 1, 640, 480);
 
     frame_orig = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
     // cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -144,9 +152,14 @@ int main(int argc, char *argv[])
     // USER: for-loop for N times to get more data on processing time
     for (int i = 0; i < 1; i++) 
     {
-        remap(frame_orig, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
-        remap(gray_orig, gray, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+        remap(frame_orig, frame, map1, map2, INTER_LINEAR);//, BORDER_CONSTANT);
+        remap(gray_orig, gray, map1, map2, INTER_LINEAR);//, BORDER_CONSTANT);
         timeprofile_stamp(td->tp, "remap");
+
+        cropped = gray(crop_rect);
+        resize(cropped, img, Size(), 1, 1);
+        cout << cropped.cols << ", " << cropped.rows << ", "  << endl;
+        timeprofile_stamp(td->tp, "crop");
         /*
         frame = imread(path, CV_LOAD_IMAGE_GRAYSCALE);
         // cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -154,10 +167,10 @@ int main(int argc, char *argv[])
         */
 
         // Make an image_u8_t header for the Mat data
-        image_u8_t im = { .width = gray.cols,
-            .height = gray.rows,
-            .stride = gray.cols,
-            .buf = gray.data
+        image_u8_t im = { .width = img.cols,
+            .height = img.rows,
+            .stride = img.cols,
+            .buf = img.data
         };
 
         zarray_t *detections = apriltag_detector_detect(td, &im);
